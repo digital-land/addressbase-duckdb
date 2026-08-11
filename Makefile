@@ -24,6 +24,9 @@ $(Database_FILE):	$(Database_STAMP) bin/database.py
 init:
 	pip3 install -r requirements.txt
 
+server:	$(Database_FILE)
+	python3 bin/server.py
+
 clobber:
 	rm -f $(DB) $(Classification_CSV)
 	rm -rf $(Database_DIR)

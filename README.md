@@ -14,6 +14,14 @@ We recommend working in [virtual environment](http://docs.python-guide.org/en/la
     $ make init
     $ make
 
+# Exploring the data
+
+A simple web viewer lets you look up all data for a UPRN or a USRN:
+
+    $ make server
+
+Then visit http://localhost:8000
+
 # Licence
 
 The software in this project is open source and covered by the [LICENSE](LICENSE) file.
