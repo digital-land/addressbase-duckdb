@@ -24,13 +24,13 @@ PAGE = """<!doctype html>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-body {{ font-family: sans-serif; margin: 2em; }}
+body {{ font-family: sans-serif; margin: 2em; margin-right: 360px; }}
 table {{ border-collapse: collapse; margin-bottom: 2em; }}
 th, td {{ border: 1px solid #ccc; padding: 4px 8px; font-size: 0.85em; }}
 th {{ background: #eee; text-align: left; }}
 form {{ margin-bottom: 0.5em; }}
 input {{ font-size: 1em; padding: 4px; }}
-#map {{ height: 300px; margin-bottom: 1em; }}
+#map {{ position: fixed; top: 0; right: 0; width: 600px; max-width: 50%; height: 300px; z-index: 1000; border: 1px solid black; }}
 </style></head>
 <body>
 <h1><a href="/">AddressBase</a></h1>
