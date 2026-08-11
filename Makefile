@@ -7,8 +7,9 @@ Classification_ZIP=cache/addressbase-product-classification-scheme.zip
 Classification_CSV=data/addressbase-classification.csv
 Database_DIR=database
 Database_STAMP=$(Database_DIR)/blpu.parquet
+Database_FILE=$(Database_DIR)/addressbase.duckdb
 
-all::	$(Classification_CSV) $(Database_STAMP)
+all::	$(Classification_CSV) $(Database_FILE)
 
 $(Classification_CSV):	$(Classification_ZIP) bin/classification.py
 	@mkdir -p data
@@ -16,6 +17,9 @@ $(Classification_CSV):	$(Classification_ZIP) bin/classification.py
 
 $(Database_STAMP):	$(AddressBase_ZIP) $(AddressBase_HEADERS_CSV) bin/load.py
 	python3 bin/load.py
+
+$(Database_FILE):	$(Database_STAMP) bin/database.py
+	python3 bin/database.py
 
 init:
 	pip3 install -r requirements.txt
