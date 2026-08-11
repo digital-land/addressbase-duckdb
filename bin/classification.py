@@ -21,7 +21,7 @@ from zipfile import ZipFile
 scheme_path = "./cache/addressbase-product-classification-scheme.zip"
 scheme_member = "addressbase-product-classification-scheme.csv"
 voa_member = "voa-primary-description-scat-lookup.csv"
-out_path = "./data/addressbase-classification.csv"
+out_path = "./database/addressbase-classification.csv"
 
 addressbase_scheme = "AddressBase Premium Classification Scheme"
 voa_scat_scheme = "VOA Special Category"

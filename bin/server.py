@@ -5,6 +5,7 @@
 # maps UPRN to USRN).
 
 import html
+import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -20,6 +21,8 @@ USRN_TABLES = ["street", "street_descriptor"]
 
 PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>{title}</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 body {{ font-family: sans-serif; margin: 2em; }}
 table {{ border-collapse: collapse; margin-bottom: 2em; }}
@@ -27,6 +30,7 @@ th, td {{ border: 1px solid #ccc; padding: 4px 8px; font-size: 0.85em; }}
 th {{ background: #eee; text-align: left; }}
 form {{ margin-bottom: 0.5em; }}
 input {{ font-size: 1em; padding: 4px; }}
+#map {{ height: 300px; margin-bottom: 1em; }}
 </style></head>
 <body>
 <h1><a href="/">AddressBase</a></h1>
@@ -45,15 +49,62 @@ def query_rows(con, table, column, value):
     return cols, rows
 
 
+def add_classification_descriptions(con, cols, rows):
+    if "CLASS_SCHEME" not in cols or "CLASSIFICATION_CODE" not in cols:
+        return cols, rows
+    scheme_i, code_i = cols.index("CLASS_SCHEME"), cols.index("CLASSIFICATION_CODE")
+    new_rows = []
+    for row in rows:
+        desc = con.execute(
+            "SELECT DESCRIPTION FROM classification_scheme WHERE CLASS_SCHEME = ? AND CLASSIFICATION_CODE = ?",
+            [row[scheme_i], row[code_i]],
+        ).fetchone()
+        new_rows.append(row + (desc[0] if desc else None,))
+    return cols + ["DESCRIPTION"], new_rows
+
+
+def render_cell(col, v):
+    if v is None:
+        return ""
+    text = html.escape(str(v))
+    if col == "USRN":
+        return f'<a href="/usrn/{text}">{text}</a>'
+    if col == "UPRN":
+        return f'<a href="/uprn/{text}">{text}</a>'
+    return text
+
+
 def render_table(name, cols, rows):
     if not rows:
         return ""
     head = "".join(f"<th>{html.escape(c)}</th>" for c in cols)
     body = "".join(
-        "<tr>" + "".join(f"<td>{html.escape(str(v)) if v is not None else ''}</td>" for v in row) + "</tr>"
+        "<tr>" + "".join(f"<td>{render_cell(c, v)}</td>" for c, v in zip(cols, row)) + "</tr>"
         for row in rows
     )
     return f"<h2>{html.escape(name)}</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+
+def render_map(points):
+    points = [p for p in points if p[0] is not None and p[1] is not None]
+    if not points:
+        return ""
+    markers = json.dumps([{"lat": lat, "lon": lon, "label": label} for lat, lon, label in points])
+    return f"""<div id="map"></div>
+<script>
+(function() {{
+  var points = {markers};
+  var map = L.map('map');
+  L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+    attribution: '&copy; OpenStreetMap contributors'
+  }}).addTo(map);
+  var markers = points.map(function(p) {{
+    return L.marker([p.lat, p.lon]).addTo(map).bindPopup(p.label);
+  }});
+  var group = L.featureGroup(markers);
+  map.fitBounds(group.getBounds(), {{maxZoom: 18, padding: [20, 20]}});
+}})();
+</script>"""
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -88,21 +139,41 @@ class Handler(BaseHTTPRequestHandler):
     def show_uprn(self, uprn):
         sections = []
         usrns = set()
+        points = []
         for table in UPRN_TABLES:
             cols, rows = query_rows(self.server.con, table, "UPRN", uprn)
+            if table == "classification":
+                cols, rows = add_classification_descriptions(self.server.con, cols, rows)
             sections.append(render_table(table, cols, rows))
             if table == "lpi" and "USRN" in cols:
                 usrns.update(row[cols.index("USRN")] for row in rows)
+            if table == "blpu" and "LATITUDE" in cols and "LONGITUDE" in cols:
+                lat_i, lon_i = cols.index("LATITUDE"), cols.index("LONGITUDE")
+                points.extend((row[lat_i], row[lon_i], f"UPRN {uprn}") for row in rows)
         links = "".join(f'<p><a href="/usrn/{u}">street USRN {u}</a></p>' for u in sorted(usrns))
-        body = f"<h1>UPRN {html.escape(uprn)}</h1>{links}" + "".join(sections)
+        body = f"<h1>UPRN {html.escape(uprn)}</h1>{render_map(points)}{links}" + "".join(sections)
         self.respond(PAGE.format(title=f"UPRN {uprn}", body=body))
 
     def show_usrn(self, usrn):
-        sections = [render_table(table, *query_rows(self.server.con, table, "USRN", usrn)) for table in USRN_TABLES]
+        sections = []
+        points = []
+        for table in USRN_TABLES:
+            cols, rows = query_rows(self.server.con, table, "USRN", usrn)
+            sections.append(render_table(table, cols, rows))
+            if table == "street" and "STREET_START_LAT" in cols:
+                start_lat, start_lon = cols.index("STREET_START_LAT"), cols.index("STREET_START_LONG")
+                end_lat, end_lon = cols.index("STREET_END_LAT"), cols.index("STREET_END_LONG")
+                for row in rows:
+                    points.append((row[start_lat], row[start_lon], f"USRN {usrn} start"))
+                    points.append((row[end_lat], row[end_lon], f"USRN {usrn} end"))
         cols, rows = query_rows(self.server.con, "lpi", "USRN", usrn)
         uprns = sorted({row[cols.index("UPRN")] for row in rows}) if "UPRN" in cols else []
         links = "".join(f'<p><a href="/uprn/{u}">UPRN {u}</a></p>' for u in uprns)
-        body = f"<h1>USRN {html.escape(usrn)}</h1>" + "".join(sections) + f"<h2>addresses on this street</h2>{links}"
+        body = (
+            f"<h1>USRN {html.escape(usrn)}</h1>{render_map(points)}"
+            + "".join(sections)
+            + f"<h2>addresses on this street</h2>{links}"
+        )
         self.respond(PAGE.format(title=f"USRN {usrn}", body=body))
 
     def log_message(self, format, *args):

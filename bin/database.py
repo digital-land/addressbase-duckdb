@@ -9,6 +9,7 @@ import duckdb
 
 DATASET_DIR = Path("database")
 DATABASE_FILE = DATASET_DIR / "addressbase.duckdb"
+CLASSIFICATION_SCHEME_CSV = DATASET_DIR / "addressbase-classification.csv"
 
 
 def main():
@@ -16,6 +17,10 @@ def main():
     for parquet_path in sorted(DATASET_DIR.glob("*.parquet")):
         name = parquet_path.stem
         con.execute(f"CREATE OR REPLACE VIEW {name} AS SELECT * FROM read_parquet('{parquet_path}')")
+    con.execute(
+        f"CREATE OR REPLACE VIEW classification_scheme AS "
+        f"SELECT * FROM read_csv('{CLASSIFICATION_SCHEME_CSV}')"
+    )
     con.close()
 
 

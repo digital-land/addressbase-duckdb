@@ -1,13 +1,15 @@
 .PHONY: init all clean clobber prune server
 .DELETE_ON_ERROR:
 
+Database_DIR=database/
+Database_FILE=$(Database_DIR)addressbase.duckdb
+
+Classification_ZIP=cache/addressbase-product-classification-scheme.zip
+Classification_CSV=database/addressbase-classification.csv
+
 AddressBase_ZIP=cache/AB76GB_CSV.zip
 AddressBase_HEADERS_CSV=cache/addressbase-premium-header-files.zip
-Classification_ZIP=cache/addressbase-product-classification-scheme.zip
-Classification_CSV=data/addressbase-classification.csv
-Database_DIR=database
-Database_STAMP=$(Database_DIR)/blpu.parquet
-Database_FILE=$(Database_DIR)/addressbase.duckdb
+Database_STAMP=$(Database_DIR)blpu.parquet
 
 all::	$(Classification_CSV) $(Database_FILE)
 
