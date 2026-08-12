@@ -37,6 +37,7 @@ input {{ font-size: 1em; padding: 4px; }}
 <form action="/uprn" method="get"><label>UPRN <input name="q" autofocus></label> <button>search</button></form>
 <form action="/usrn" method="get"><label>USRN <input name="q"></label> <button>search</button></form>
 <form action="/postcode" method="get"><label>postcode <input name="q"></label> <button>search</button></form>
+<form action="/udprn" method="get"><label>UDPRN <input name="q"></label> <button>search</button></form>
 {body}
 </body></html>
 """
@@ -92,6 +93,8 @@ def render_cell(col, v):
         return f'<a href="/usrn/{text}">{text}</a>'
     if col == "UPRN":
         return f'<a href="/uprn/{text}">{text}</a>'
+    if col == "UDPRN":
+        return f'<a href="/udprn/{text}">{text}</a>'
     if col in ("POSTCODE_LOCATOR", "POSTCODE"):
         return f'<a href="/postcode/{quote(str(v))}">{text}</a>'
     return text
@@ -146,12 +149,16 @@ class Handler(BaseHTTPRequestHandler):
             self.redirect(f"/usrn/{q.strip()}")
         elif parsed.path == "/postcode" and q:
             self.redirect(f"/postcode/{quote(normalize_postcode(q))}")
+        elif parsed.path == "/udprn" and q:
+            self.redirect(f"/udprn/{q.strip()}")
         elif parsed.path.startswith("/uprn/"):
             self.show_uprn(parsed.path.removeprefix("/uprn/"))
         elif parsed.path.startswith("/usrn/"):
             self.show_usrn(parsed.path.removeprefix("/usrn/"))
         elif parsed.path.startswith("/postcode/"):
             self.show_postcode(unquote(parsed.path.removeprefix("/postcode/")))
+        elif parsed.path.startswith("/udprn/"):
+            self.show_udprn(parsed.path.removeprefix("/udprn/"))
         else:
             self.respond(PAGE.format(title="AddressBase", body=""))
 
@@ -250,6 +257,26 @@ class Handler(BaseHTTPRequestHandler):
             f"<h2>addresses</h2>{uprn_links}"
         )
         self.respond(PAGE.format(title=f"postcode {postcode}", body=body))
+
+    def show_udprn(self, udprn):
+        cols, rows = query_rows(self.server.con, "delivery_point_address", "UDPRN", udprn)
+        uprns = sorted({row[cols.index("UPRN")] for row in rows}) if "UPRN" in cols else []
+
+        points = []
+        if uprns:
+            blpu_rows = self.server.con.execute(
+                "SELECT UPRN, LATITUDE, LONGITUDE FROM blpu WHERE UPRN IN "
+                f"({','.join('?' * len(uprns))})",
+                uprns,
+            ).fetchall()
+            points.extend((lat, lon, f"UPRN {uprn}", None) for uprn, lat, lon in blpu_rows)
+
+        links = "".join(f'<p><a href="/uprn/{uprn}">UPRN {uprn}</a></p>' for uprn in uprns)
+        body = (
+            f"<h1>UDPRN {html.escape(udprn)}</h1>{render_map(points)}{links}"
+            + render_table("delivery_point_address", cols, rows)
+        )
+        self.respond(PAGE.format(title=f"UDPRN {udprn}", body=body))
 
     def log_message(self, format, *args):
         print(f"{self.address_string()} {format % args}", file=sys.stderr)
