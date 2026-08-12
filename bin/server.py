@@ -150,7 +150,7 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/postcode" and q:
             self.redirect(f"/postcode/{quote(normalize_postcode(q))}")
         elif parsed.path == "/udprn" and q:
-            self.redirect(f"/udprn/{q.strip()}")
+            self.redirect_udprn(q.strip())
         elif parsed.path.startswith("/uprn/"):
             self.show_uprn(parsed.path.removeprefix("/uprn/"))
         elif parsed.path.startswith("/usrn/"):
@@ -158,7 +158,7 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path.startswith("/postcode/"):
             self.show_postcode(unquote(parsed.path.removeprefix("/postcode/")))
         elif parsed.path.startswith("/udprn/"):
-            self.show_udprn(parsed.path.removeprefix("/udprn/"))
+            self.redirect_udprn(parsed.path.removeprefix("/udprn/"))
         else:
             self.respond(PAGE.format(title="AddressBase", body=""))
 
@@ -258,25 +258,14 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.respond(PAGE.format(title=f"postcode {postcode}", body=body))
 
-    def show_udprn(self, udprn):
-        cols, rows = query_rows(self.server.con, "delivery_point_address", "UDPRN", udprn)
-        uprns = sorted({row[cols.index("UPRN")] for row in rows}) if "UPRN" in cols else []
-
-        points = []
-        if uprns:
-            blpu_rows = self.server.con.execute(
-                "SELECT UPRN, LATITUDE, LONGITUDE FROM blpu WHERE UPRN IN "
-                f"({','.join('?' * len(uprns))})",
-                uprns,
-            ).fetchall()
-            points.extend((lat, lon, f"UPRN {uprn}", None) for uprn, lat, lon in blpu_rows)
-
-        links = "".join(f'<p><a href="/uprn/{uprn}">UPRN {uprn}</a></p>' for uprn in uprns)
-        body = (
-            f"<h1>UDPRN {html.escape(udprn)}</h1>{render_map(points)}{links}"
-            + render_table("delivery_point_address", cols, rows)
-        )
-        self.respond(PAGE.format(title=f"UDPRN {udprn}", body=body))
+    def redirect_udprn(self, udprn):
+        row = self.server.con.execute(
+            "SELECT UPRN FROM delivery_point_address WHERE UDPRN = ?", [udprn]
+        ).fetchone()
+        if row:
+            self.redirect(f"/uprn/{row[0]}")
+        else:
+            self.respond(f"<h1>UDPRN {html.escape(udprn)}</h1><p>not found</p>", status=404)
 
     def log_message(self, format, *args):
         print(f"{self.address_string()} {format % args}", file=sys.stderr)
