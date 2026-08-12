@@ -169,8 +169,8 @@ class Handler(BaseHTTPRequestHandler):
                 start_lat, start_lon = cols.index("STREET_START_LAT"), cols.index("STREET_START_LONG")
                 end_lat, end_lon = cols.index("STREET_END_LAT"), cols.index("STREET_END_LONG")
                 for row in rows:
-                    points.append((row[start_lat], row[start_lon], f"USRN {usrn} start", "red"))
-                    points.append((row[end_lat], row[end_lon], f"USRN {usrn} end", "red"))
+                    points.append((row[start_lat], row[start_lon], f"USRN {usrn} START", "red"))
+                    points.append((row[end_lat], row[end_lon], f"USRN {usrn} END", "red"))
         cols, rows = query_rows(self.server.con, "lpi", "USRN", usrn)
         uprns = sorted({row[cols.index("UPRN")] for row in rows}) if "UPRN" in cols else []
         if uprns:
@@ -179,8 +179,8 @@ class Handler(BaseHTTPRequestHandler):
                 f"({','.join('?' * len(uprns))})",
                 uprns,
             ).fetchall()
-            points.extend((lat, lon, f"UPRN {u}", None) for u, lat, lon in blpu_rows)
-        links = "".join(f'<p><a href="/uprn/{u}">UPRN {u}</a></p>' for u in uprns)
+            points.extend((lat, lon, f"UPRN <a href='/uprn/{uprn}'>{uprn}</a>", None) for uprn, lat, lon in blpu_rows)
+        links = "".join(f'<p><a href="/uprn/{uprn}">UPRN {uprn}</a></p>' for uprn in uprns)
         body = (
             f"<h1>USRN {html.escape(usrn)}</h1>{render_map(points)}"
             + "".join(sections)
