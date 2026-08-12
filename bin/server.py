@@ -63,6 +63,19 @@ def add_classification_descriptions(con, cols, rows):
     return cols + ["DESCRIPTION"], new_rows
 
 
+def add_custodian_names(con, cols, rows):
+    if "LOCAL_CUSTODIAN_CODE" not in cols:
+        return cols, rows
+    code_i = cols.index("LOCAL_CUSTODIAN_CODE")
+    new_rows = []
+    for row in rows:
+        name = con.execute(
+            "SELECT NAME FROM custodian WHERE LOCAL_CUSTODIAN_CODE = ?", [row[code_i]]
+        ).fetchone()
+        new_rows.append(row + (name[0] if name else None,))
+    return cols + ["CUSTODIAN_NAME"], new_rows
+
+
 def render_cell(col, v):
     if v is None:
         return ""
@@ -149,6 +162,8 @@ class Handler(BaseHTTPRequestHandler):
             cols, rows = query_rows(self.server.con, table, "UPRN", uprn)
             if table == "classification":
                 cols, rows = add_classification_descriptions(self.server.con, cols, rows)
+            if table == "blpu":
+                cols, rows = add_custodian_names(self.server.con, cols, rows)
             sections.append(render_table(table, cols, rows))
             if table == "lpi" and "USRN" in cols:
                 usrns.update(row[cols.index("USRN")] for row in rows)
