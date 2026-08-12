@@ -9,7 +9,7 @@ import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import duckdb
 
@@ -36,6 +36,7 @@ input {{ font-size: 1em; padding: 4px; }}
 <h1><a href="/">AddressBase</a></h1>
 <form action="/uprn" method="get"><label>UPRN <input name="q" autofocus></label> <button>search</button></form>
 <form action="/usrn" method="get"><label>USRN <input name="q"></label> <button>search</button></form>
+<form action="/postcode" method="get"><label>postcode <input name="q"></label> <button>search</button></form>
 {body}
 </body></html>
 """
@@ -76,6 +77,13 @@ def add_custodian_names(con, cols, rows):
     return cols + ["CUSTODIAN_NAME"], new_rows
 
 
+def normalize_postcode(postcode):
+    postcode = postcode.strip().upper().replace(" ", "")
+    if len(postcode) > 3:
+        postcode = postcode[:-3] + " " + postcode[-3:]
+    return postcode
+
+
 def render_cell(col, v):
     if v is None:
         return ""
@@ -84,6 +92,8 @@ def render_cell(col, v):
         return f'<a href="/usrn/{text}">{text}</a>'
     if col == "UPRN":
         return f'<a href="/uprn/{text}">{text}</a>'
+    if col in ("POSTCODE_LOCATOR", "POSTCODE"):
+        return f'<a href="/postcode/{quote(str(v))}">{text}</a>'
     return text
 
 
@@ -134,10 +144,14 @@ class Handler(BaseHTTPRequestHandler):
             self.redirect(f"/uprn/{q.strip()}")
         elif parsed.path == "/usrn" and q:
             self.redirect(f"/usrn/{q.strip()}")
+        elif parsed.path == "/postcode" and q:
+            self.redirect(f"/postcode/{quote(normalize_postcode(q))}")
         elif parsed.path.startswith("/uprn/"):
             self.show_uprn(parsed.path.removeprefix("/uprn/"))
         elif parsed.path.startswith("/usrn/"):
             self.show_usrn(parsed.path.removeprefix("/usrn/"))
+        elif parsed.path.startswith("/postcode/"):
+            self.show_postcode(unquote(parsed.path.removeprefix("/postcode/")))
         else:
             self.respond(PAGE.format(title="AddressBase", body=""))
 
@@ -202,6 +216,40 @@ class Handler(BaseHTTPRequestHandler):
             + f"<h2>addresses on this street</h2>{links}"
         )
         self.respond(PAGE.format(title=f"USRN {usrn}", body=body))
+
+    def show_postcode(self, postcode):
+        postcode = normalize_postcode(postcode)
+        con = self.server.con
+        uprn_rows = con.execute(
+            "SELECT UPRN, LATITUDE, LONGITUDE FROM blpu WHERE POSTCODE_LOCATOR = ? ORDER BY UPRN", [postcode]
+        ).fetchall()
+        uprns = [row[0] for row in uprn_rows]
+        points = [(lat, lon, f"UPRN {uprn}", None) for uprn, lat, lon in uprn_rows]
+
+        usrns = []
+        if uprns:
+            usrn_rows = con.execute(
+                f"SELECT DISTINCT USRN FROM lpi WHERE UPRN IN ({','.join('?' * len(uprns))})", uprns
+            ).fetchall()
+            usrns = sorted(row[0] for row in usrn_rows if row[0] is not None)
+        if usrns:
+            street_rows = con.execute(
+                "SELECT USRN, STREET_START_LAT, STREET_START_LONG, STREET_END_LAT, STREET_END_LONG "
+                f"FROM street WHERE USRN IN ({','.join('?' * len(usrns))})",
+                usrns,
+            ).fetchall()
+            for usrn, start_lat, start_lon, end_lat, end_lon in street_rows:
+                points.append((start_lat, start_lon, f"USRN {usrn} START", "red"))
+                points.append((end_lat, end_lon, f"USRN {usrn} END", "red"))
+
+        usrn_links = "".join(f'<p><a href="/usrn/{usrn}">USRN {usrn}</a></p>' for usrn in usrns)
+        uprn_links = "".join(f'<p><a href="/uprn/{uprn}">UPRN {uprn}</a></p>' for uprn in uprns)
+        body = (
+            f"<h1>postcode {html.escape(postcode)}</h1>{render_map(points)}"
+            f"<h2>streets</h2>{usrn_links}"
+            f"<h2>addresses</h2>{uprn_links}"
+        )
+        self.respond(PAGE.format(title=f"postcode {postcode}", body=body))
 
     def log_message(self, format, *args):
         print(f"{self.address_string()} {format % args}", file=sys.stderr)
