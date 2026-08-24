@@ -58,6 +58,7 @@ tr.selected {{ background: #ffdd00; }}
   body:has(table.wide-table) {{ page: wide; }}
   a, a:visited {{ color: #0000ee; text-decoration: none; }}
   .checkbox-col {{ display: none; }}
+  .leaflet-control-zoom, .leaflet-control-fullscreen {{ display: none; }}
   tr.selected {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
   table.wide-table {{ table-layout: fixed; width: 100%; font-size: 0.55em; }}
   table.wide-table th, table.wide-table td {{
