@@ -208,7 +208,23 @@ def render_street_table(rows):
     return f"<h2>Streets</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
-def render_map(points):
+def usrn_paths(con, usrns):
+    if not usrns:
+        return []
+    rows = con.execute(
+        "SELECT GEOMETRY_GEOJSON FROM open_usrn WHERE CAST(USRN AS VARCHAR) IN "
+        f"({','.join('?' * len(usrns))})",
+        [str(usrn) for usrn in usrns],
+    ).fetchall()
+    paths = []
+    for (geojson_text,) in rows:
+        geometry = json.loads(geojson_text)
+        coord_lists = geometry["coordinates"] if geometry["type"] == "MultiLineString" else [geometry["coordinates"]]
+        paths.extend([[lat, lon] for lon, lat in coords] for coords in coord_lists)
+    return paths
+
+
+def render_map(points, lines=()):
     points = [p for p in points if p[0] is not None and p[1] is not None]
     if not points:
         return ""
@@ -218,14 +234,19 @@ def render_map(points):
             for lat, lon, label, color, id_ in points
         ]
     )
+    lines_json = json.dumps(lines)
     return rf"""<div id="map"></div>
 <script>
 (function() {{
   var points = {markers};
+  var lines = {lines_json};
   var map = L.map('map');
   L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
     attribution: '&copy; OpenStreetMap contributors'
   }}).addTo(map);
+  lines.forEach(function(path) {{
+    L.polyline(path, {{color: 'red', weight: 3}}).addTo(map);
+  }});
   var markersById = {{}};
   var usrnCounts = {{}};
   function updateHighlight(checkbox, checked) {{
@@ -375,7 +396,8 @@ class Handler(BaseHTTPRequestHandler):
                 lat_i, lon_i = cols.index("LATITUDE"), cols.index("LONGITUDE")
                 points.extend((row[lat_i], row[lon_i], uprn_label(uprn), None, None) for row in rows)
         links = "".join(f'<p><a href="/usrn/{u}">USRN {u}</a></p>' for u in sorted(usrns))
-        body = f"{render_map(points)}{links}" + "".join(sections)
+        lines = usrn_paths(self.server.con, sorted(usrns))
+        body = f"{render_map(points, lines)}{links}" + "".join(sections)
         heading = f"<h1>UPRN {html.escape(uprn)}</h1>"
         self.respond(PAGE.format(title=f"UPRN {uprn}", heading=heading, forms="", body=body))
 
@@ -420,7 +442,8 @@ class Handler(BaseHTTPRequestHandler):
             ]
             uprn_table = render_selectable_uprn_table(uprn_summary_rows)
 
-        body = f"{render_map(points)}" + "".join(sections) + uprn_table
+        lines = usrn_paths(con, [usrn])
+        body = f"{render_map(points, lines)}" + "".join(sections) + uprn_table
         heading = f"<h1>USRN {html.escape(usrn)}</h1>"
         self.respond(PAGE.format(title=f"USRN {usrn}", heading=heading, forms="", body=body))
 
@@ -476,7 +499,8 @@ class Handler(BaseHTTPRequestHandler):
             ]
             uprn_table = render_selectable_uprn_table(uprn_summary_rows, checked_uprns)
 
-        body = f"{render_map(points)}{street_table}{uprn_table}"
+        lines = usrn_paths(con, usrns)
+        body = f"{render_map(points, lines)}{street_table}{uprn_table}"
         heading = f"<h1>Postcode {html.escape(postcode)}</h1>"
         self.respond(PAGE.format(title=f"postcode {postcode}", heading=heading, forms="", body=body))
 

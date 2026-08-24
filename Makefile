@@ -14,6 +14,10 @@ AddressBase_ZIP=cache/AB76GB_CSV.zip
 AddressBase_HEADERS_CSV=cache/addressbase-premium-header-files.zip
 Database_STAMP=$(Database_DIR)blpu.parquet
 
+OpenUSRN_ZIP=cache/osopenusrn-gpkg.zip
+OpenUSRN_GPKG=cache/osopenusrn.gpkg
+OpenUSRN_PARQUET=$(Database_DIR)open_usrn.parquet
+
 all::	$(Classification_CSV) $(Custodian_LOOKUP_CSV) $(Database_FILE)
 
 $(Classification_CSV):	$(Classification_ZIP) bin/classification.py
@@ -29,7 +33,16 @@ $(Custodian_LOOKUP_CSV):	$(Custodian_CSV) bin/custodian.py
 $(Database_STAMP):	$(AddressBase_ZIP) $(AddressBase_HEADERS_CSV) bin/load.py
 	python3 bin/load.py
 
-$(Database_FILE):	$(Database_STAMP) $(Custodian_LOOKUP_CSV) bin/database.py
+$(OpenUSRN_ZIP):
+	curl -sL -o $(OpenUSRN_ZIP) "https://api.os.uk/downloads/v1/products/OpenUSRN/downloads?area=GB&format=GeoPackage&redirect"
+
+$(OpenUSRN_GPKG):	$(OpenUSRN_ZIP)
+	unzip -p $(OpenUSRN_ZIP) '*.gpkg' > $(OpenUSRN_GPKG)
+
+$(OpenUSRN_PARQUET):	$(OpenUSRN_GPKG) bin/open_usrn.py
+	python3 bin/open_usrn.py
+
+$(Database_FILE):	$(Database_STAMP) $(Custodian_LOOKUP_CSV) $(OpenUSRN_PARQUET) bin/database.py
 	python3 bin/database.py
 
 init:
