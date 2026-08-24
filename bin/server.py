@@ -47,6 +47,8 @@ th {{ background: #eee; text-align: left; }}
 form {{ margin-bottom: 0.5em; }}
 input {{ font-size: 1em; padding: 4px; }}
 #map {{ width: 100%; height: 300px; border: 1px solid black; margin-bottom: 1em; }}
+#map:fullscreen {{ width: 100vw; height: 100vh; }}
+.leaflet-control-fullscreen a {{ font-size: 1.2em; line-height: 26px; }}
 tr.selected {{ background: #ffdd00; }}
 .topbar {{ display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }}
 .topbar h1 {{ margin: 0.67em 0; }}
@@ -244,6 +246,29 @@ def render_map(points, lines=()):
   L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
     attribution: '&copy; OpenStreetMap contributors'
   }}).addTo(map);
+  var FullscreenControl = L.Control.extend({{
+    options: {{position: 'topleft'}},
+    onAdd: function() {{
+      var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-fullscreen');
+      var link = L.DomUtil.create('a', '', container);
+      link.href = '#';
+      link.title = 'Fullscreen';
+      link.innerHTML = '&#x26F6;';
+      L.DomEvent.on(link, 'click', L.DomEvent.stop).on(link, 'click', function() {{
+        var mapEl = map.getContainer();
+        if (document.fullscreenElement) {{
+          document.exitFullscreen();
+        }} else {{
+          mapEl.requestFullscreen();
+        }}
+      }});
+      return container;
+    }}
+  }});
+  map.addControl(new FullscreenControl());
+  document.addEventListener('fullscreenchange', function() {{
+    setTimeout(function() {{ map.invalidateSize(); }}, 100);
+  }});
   lines.forEach(function(path) {{
     L.polyline(path, {{color: 'red', weight: 3}}).addTo(map);
   }});
