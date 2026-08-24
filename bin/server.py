@@ -223,6 +223,19 @@ def render_map(points):
       if (streetRow) streetRow.classList.toggle('selected', usrnCounts[usrn] > 0);
     }}
   }}
+  function updateQueryString() {{
+    var checked = Array.from(document.querySelectorAll('.uprn-select:checked')).map(function(cb) {{
+      return cb.id.replace(/^uprn-/, '');
+    }});
+    var params = new URLSearchParams(location.search);
+    if (checked.length) {{
+      params.set('uprn', checked.join(','));
+    }} else {{
+      params.delete('uprn');
+    }}
+    var search = params.toString();
+    history.replaceState(null, '', location.pathname + (search ? '?' + search : '') + location.hash);
+  }}
   var markers = points.map(function(p) {{
     var color = p.color || '#3388ff';
     var marker = L.circleMarker([p.lat, p.lon], {{radius: 4, color: color, fillColor: color, fillOpacity: 0.9}});
@@ -234,6 +247,7 @@ def render_map(points):
         if (checkbox && !checkbox.checked) {{
           checkbox.checked = true;
           updateHighlight(checkbox, true);
+          updateQueryString();
         }}
       }});
       marker.on('popupclose', function() {{
@@ -241,6 +255,7 @@ def render_map(points):
         if (checkbox && checkbox.checked) {{
           checkbox.checked = false;
           updateHighlight(checkbox, false);
+          updateQueryString();
         }}
       }});
     }}
@@ -249,6 +264,7 @@ def render_map(points):
   document.addEventListener('change', function(e) {{
     if (!e.target.matches('.uprn-select')) return;
     updateHighlight(e.target, e.target.checked);
+    updateQueryString();
     var marker = markersById[e.target.id];
     if (!marker) return;
     if (e.target.checked) {{
