@@ -127,9 +127,8 @@ def render_map(points):
     attribution: '&copy; OpenStreetMap contributors'
   }}).addTo(map);
   var markers = points.map(function(p) {{
-    var marker = p.color
-      ? L.circleMarker([p.lat, p.lon], {{radius: 8, color: p.color, fillColor: p.color, fillOpacity: 0.9}})
-      : L.marker([p.lat, p.lon]);
+    var color = p.color || '#3388ff';
+    var marker = L.circleMarker([p.lat, p.lon], {{radius: 8, color: color, fillColor: color, fillOpacity: 0.9}});
     return marker.addTo(map).bindPopup(p.label);
   }});
   var group = L.featureGroup(markers);
