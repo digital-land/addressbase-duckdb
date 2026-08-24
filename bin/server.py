@@ -47,6 +47,7 @@ th {{ background: #eee; text-align: left; }}
 form {{ margin-bottom: 0.5em; }}
 input {{ font-size: 1em; padding: 4px; }}
 #map {{ width: 100%; height: 300px; border: 1px solid black; margin-bottom: 1em; }}
+tr.selected {{ background: #ffdd00; }}
 </style></head>
 <body>
 <h1><a href="/">AddressBase</a></h1>
@@ -158,7 +159,7 @@ def render_selectable_uprn_table(rows):
         return ""
     body = "".join(
         "<tr>"
-        f'<td><input type="checkbox" class="uprn-select" id="uprn-{uprn}"></td>'
+        f'<td><input type="checkbox" class="uprn-select" id="uprn-{uprn}" data-usrn="{usrn}"></td>'
         f"<td>{render_cell('UPRN', uprn)}</td>"
         f"<td>{render_cell('USRN', usrn or None)}</td>"
         f"<td>{html.escape(sao)}</td>"
@@ -169,6 +170,22 @@ def render_selectable_uprn_table(rows):
     )
     head = "<th></th><th>UPRN</th><th>USRN</th><th>SAO</th><th>PAO</th><th>DELIVERY_ADDRESS</th>"
     return f"<h2>addresses</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+
+def render_street_table(rows):
+    if not rows:
+        return ""
+    body = "".join(
+        f'<tr id="street-{usrn}">'
+        f"<td>{render_cell('USRN', usrn)}</td>"
+        f"<td>{render_cell('STREET_DESCRIPTION', street_description)}</td>"
+        f"<td>{render_cell('LOCALITY', locality)}</td>"
+        f"<td>{render_cell('TOWN_NAME', town_name)}</td>"
+        "</tr>"
+        for usrn, street_description, locality, town_name in rows
+    )
+    head = "<th>USRN</th><th>STREET_DESCRIPTION</th><th>LOCALITY</th><th>TOWN_NAME</th>"
+    return f"<h2>streets</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
 def render_map(points):
@@ -190,6 +207,17 @@ def render_map(points):
     attribution: '&copy; OpenStreetMap contributors'
   }}).addTo(map);
   var markersById = {{}};
+  var usrnCounts = {{}};
+  function updateHighlight(checkbox, checked) {{
+    var row = checkbox.closest('tr');
+    if (row) row.classList.toggle('selected', checked);
+    var usrn = checkbox.dataset.usrn;
+    if (usrn) {{
+      usrnCounts[usrn] = (usrnCounts[usrn] || 0) + (checked ? 1 : -1);
+      var streetRow = document.getElementById('street-' + usrn);
+      if (streetRow) streetRow.classList.toggle('selected', usrnCounts[usrn] > 0);
+    }}
+  }}
   var markers = points.map(function(p) {{
     var color = p.color || '#3388ff';
     var marker = L.circleMarker([p.lat, p.lon], {{radius: 4, color: color, fillColor: color, fillOpacity: 0.9}});
@@ -198,17 +226,24 @@ def render_map(points):
       markersById[p.id] = marker;
       marker.on('click', function() {{
         var checkbox = document.getElementById(p.id);
-        if (checkbox) checkbox.checked = true;
+        if (checkbox && !checkbox.checked) {{
+          checkbox.checked = true;
+          updateHighlight(checkbox, true);
+        }}
       }});
       marker.on('popupclose', function() {{
         var checkbox = document.getElementById(p.id);
-        if (checkbox) checkbox.checked = false;
+        if (checkbox && checkbox.checked) {{
+          checkbox.checked = false;
+          updateHighlight(checkbox, false);
+        }}
       }});
     }}
     return marker;
   }});
   document.addEventListener('change', function(e) {{
     if (!e.target.matches('.uprn-select')) return;
+    updateHighlight(e.target, e.target.checked);
     var marker = markersById[e.target.id];
     if (!marker) return;
     if (e.target.checked) {{
@@ -341,9 +376,7 @@ class Handler(BaseHTTPRequestHandler):
                 f"WHERE USRN IN ({','.join('?' * len(usrns))}) ORDER BY USRN",
                 usrns,
             ).fetchall()
-            street_table = render_table(
-                "streets", ["USRN", "STREET_DESCRIPTION", "LOCALITY", "TOWN_NAME"], street_rows
-            )
+            street_table = render_street_table(street_rows)
 
         uprn_table = ""
         if uprns:
