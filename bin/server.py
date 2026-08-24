@@ -51,7 +51,9 @@ tr.selected {{ background: #ffdd00; }}
 .topbar {{ display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }}
 .topbar h1 {{ margin: 0.67em 0; }}
 @media print {{
-  @page {{ size: landscape; }}
+  @page {{ size: portrait; }}
+  @page wide {{ size: landscape; }}
+  body:has(table.wide-table) {{ page: wide; }}
   a, a:visited {{ color: #0000ee; text-decoration: none; }}
   .checkbox-col {{ display: none; }}
   tr.selected {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
