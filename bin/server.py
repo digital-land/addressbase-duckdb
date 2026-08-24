@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 import duckdb
 
 DATABASE_FILE = Path("database/addressbase.duckdb")
-PORT = 8000
+PORT = 8002
 
 UPRN_TABLES = ["blpu", "lpi", "classification", "delivery_point_address", "organisation", "xref", "successor"]
 USRN_TABLES = ["street", "street_descriptor"]
