@@ -53,6 +53,7 @@ tr.selected {{ background: #ffdd00; }}
 @media print {{
   a, a:visited {{ color: #0000ee; text-decoration: none; }}
   .checkbox-col {{ display: none; }}
+  tr.selected {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
 }}
 </style></head>
 <body>
