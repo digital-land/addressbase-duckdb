@@ -103,6 +103,14 @@ def normalize_postcode(postcode):
     return postcode
 
 
+def uprn_label(uprn, suffix=""):
+    return f"UPRN <a href='/uprn/{uprn}'>{uprn}</a>{suffix}"
+
+
+def usrn_label(usrn, suffix=""):
+    return f"USRN <a href='/usrn/{usrn}'>{usrn}</a>{suffix}"
+
+
 def render_cell(col, v):
     if v is None:
         return ""
@@ -267,7 +275,7 @@ class Handler(BaseHTTPRequestHandler):
                 usrns.update(row[cols.index("USRN")] for row in rows)
             if table == "blpu" and "LATITUDE" in cols and "LONGITUDE" in cols:
                 lat_i, lon_i = cols.index("LATITUDE"), cols.index("LONGITUDE")
-                points.extend((row[lat_i], row[lon_i], f"UPRN {uprn}", None, None) for row in rows)
+                points.extend((row[lat_i], row[lon_i], uprn_label(uprn), None, None) for row in rows)
         links = "".join(f'<p><a href="/usrn/{u}">USRN {u}</a></p>' for u in sorted(usrns))
         body = f"<h1>UPRN {html.escape(uprn)}</h1>{render_map(points)}{links}" + "".join(sections)
         self.respond(PAGE.format(title=f"UPRN {uprn}", forms="", body=body))
@@ -282,8 +290,8 @@ class Handler(BaseHTTPRequestHandler):
                 start_lat, start_lon = cols.index("STREET_START_LAT"), cols.index("STREET_START_LONG")
                 end_lat, end_lon = cols.index("STREET_END_LAT"), cols.index("STREET_END_LONG")
                 for row in rows:
-                    points.append((row[start_lat], row[start_lon], f"USRN {usrn} START", "red", None))
-                    points.append((row[end_lat], row[end_lon], f"USRN {usrn} END", "red", None))
+                    points.append((row[start_lat], row[start_lon], usrn_label(usrn, " START"), "red", None))
+                    points.append((row[end_lat], row[end_lon], usrn_label(usrn, " END"), "red", None))
         cols, rows = query_rows(self.server.con, "lpi", "USRN", usrn)
         uprns = sorted({row[cols.index("UPRN")] for row in rows}) if "UPRN" in cols else []
         if uprns:
@@ -292,9 +300,7 @@ class Handler(BaseHTTPRequestHandler):
                 f"({','.join('?' * len(uprns))})",
                 uprns,
             ).fetchall()
-            points.extend(
-                (lat, lon, f"UPRN <a href='/uprn/{uprn}'>{uprn}</a>", None, None) for uprn, lat, lon in blpu_rows
-            )
+            points.extend((lat, lon, uprn_label(uprn), None, None) for uprn, lat, lon in blpu_rows)
         links = "".join(f'<p><a href="/uprn/{uprn}">UPRN {uprn}</a></p>' for uprn in uprns)
         body = (
             f"<h1>USRN {html.escape(usrn)}</h1>{render_map(points)}"
@@ -310,7 +316,7 @@ class Handler(BaseHTTPRequestHandler):
             "SELECT UPRN, LATITUDE, LONGITUDE FROM blpu WHERE POSTCODE_LOCATOR = ? ORDER BY UPRN", [postcode]
         ).fetchall()
         uprns = [row[0] for row in uprn_rows]
-        points = [(lat, lon, f"UPRN {uprn}", None, f"uprn-{uprn}") for uprn, lat, lon in uprn_rows]
+        points = [(lat, lon, uprn_label(uprn), None, f"uprn-{uprn}") for uprn, lat, lon in uprn_rows]
 
         usrns = []
         if uprns:
@@ -325,8 +331,8 @@ class Handler(BaseHTTPRequestHandler):
                 usrns,
             ).fetchall()
             for usrn, start_lat, start_lon, end_lat, end_lon in street_rows:
-                points.append((start_lat, start_lon, f"USRN {usrn} START", "red", None))
-                points.append((end_lat, end_lon, f"USRN {usrn} END", "red", None))
+                points.append((start_lat, start_lon, usrn_label(usrn, " START"), "red", None))
+                points.append((end_lat, end_lon, usrn_label(usrn, " END"), "red", None))
 
         street_table = ""
         if usrns:
