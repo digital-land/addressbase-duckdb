@@ -51,9 +51,16 @@ tr.selected {{ background: #ffdd00; }}
 .topbar {{ display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }}
 .topbar h1 {{ margin: 0.67em 0; }}
 @media print {{
+  @page {{ size: landscape; }}
   a, a:visited {{ color: #0000ee; text-decoration: none; }}
   .checkbox-col {{ display: none; }}
   tr.selected {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+  table.wide-table {{ table-layout: fixed; width: 100%; font-size: 0.55em; }}
+  table.wide-table th, table.wide-table td {{
+    padding: 2px 3px;
+    overflow-wrap: anywhere;
+  }}
+  table.wide-table tr {{ break-inside: avoid; }}
 }}
 </style></head>
 <body>
@@ -161,7 +168,7 @@ def render_table(name, cols, rows):
         "<tr>" + "".join(f"<td>{render_cell(c, v)}</td>" for c, v in zip(cols, row)) + "</tr>"
         for row in rows
     )
-    return f"<h2>{html.escape(name)}</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+    return f'<h2>{html.escape(name)}</h2><table class="wide-table"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
 
 
 def render_selectable_uprn_table(rows, checked_uprns=frozenset()):
