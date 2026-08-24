@@ -184,12 +184,16 @@ def render_map(points):
   var markers = points.map(function(p) {{
     var color = p.color || '#3388ff';
     var marker = L.circleMarker([p.lat, p.lon], {{radius: 4, color: color, fillColor: color, fillOpacity: 0.9}});
-    marker.addTo(map).bindPopup(p.label);
+    marker.addTo(map).bindPopup(p.label, {{autoClose: false, closeOnClick: false}});
     if (p.id) {{
       markersById[p.id] = marker;
       marker.on('click', function() {{
         var checkbox = document.getElementById(p.id);
         if (checkbox) checkbox.checked = true;
+      }});
+      marker.on('popupclose', function() {{
+        var checkbox = document.getElementById(p.id);
+        if (checkbox) checkbox.checked = false;
       }});
     }}
     return marker;
