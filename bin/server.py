@@ -380,10 +380,11 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(PAGE.format(title=f"UPRN {uprn}", heading=heading, forms="", body=body))
 
     def show_usrn(self, usrn):
+        con = self.server.con
         sections = []
         points = []
         for table in USRN_TABLES:
-            cols, rows = query_rows(self.server.con, table, "USRN", usrn)
+            cols, rows = query_rows(con, table, "USRN", usrn)
             sections.append(render_table(table, cols, rows))
             if table == "street" and "STREET_START_LAT" in cols:
                 start_lat, start_lon = cols.index("STREET_START_LAT"), cols.index("STREET_START_LONG")
@@ -391,21 +392,35 @@ class Handler(BaseHTTPRequestHandler):
                 for row in rows:
                     points.append((row[start_lat], row[start_lon], usrn_label(usrn, " START"), "red", None))
                     points.append((row[end_lat], row[end_lon], usrn_label(usrn, " END"), "red", None))
-        cols, rows = query_rows(self.server.con, "lpi", "USRN", usrn)
+        cols, rows = query_rows(con, "lpi", "USRN", usrn)
         uprns = sorted({row[cols.index("UPRN")] for row in rows}) if "UPRN" in cols else []
         if uprns:
-            blpu_rows = self.server.con.execute(
+            blpu_rows = con.execute(
                 "SELECT UPRN, LATITUDE, LONGITUDE FROM blpu WHERE UPRN IN "
                 f"({','.join('?' * len(uprns))})",
                 uprns,
             ).fetchall()
-            points.extend((lat, lon, uprn_label(uprn), None, None) for uprn, lat, lon in blpu_rows)
-        links = "".join(f'<p><a href="/uprn/{uprn}">UPRN {uprn}</a></p>' for uprn in uprns)
-        body = (
-            f"{render_map(points)}"
-            + "".join(sections)
-            + f"<h2>addresses on this street</h2>{links}"
-        )
+            points.extend((lat, lon, uprn_label(uprn), None, f"uprn-{uprn}") for uprn, lat, lon in blpu_rows)
+
+        uprn_table = ""
+        if uprns:
+            usrn_by_uprn = field_by_uprn(con, "lpi", uprns, ["USRN"])
+            sao_by_uprn = field_by_uprn(con, "lpi", uprns, SAO_FIELDS)
+            pao_by_uprn = field_by_uprn(con, "lpi", uprns, PAO_FIELDS)
+            address_by_uprn = field_by_uprn(con, "delivery_point_address", uprns, DELIVERY_ADDRESS_FIELDS, sep=", ")
+            uprn_summary_rows = [
+                (
+                    uprn,
+                    usrn_by_uprn.get(uprn, ""),
+                    sao_by_uprn.get(uprn, ""),
+                    pao_by_uprn.get(uprn, ""),
+                    address_by_uprn.get(uprn, ""),
+                )
+                for uprn in uprns
+            ]
+            uprn_table = render_selectable_uprn_table(uprn_summary_rows)
+
+        body = f"{render_map(points)}" + "".join(sections) + uprn_table
         heading = f"<h1>USRN {html.escape(usrn)}</h1>"
         self.respond(PAGE.format(title=f"USRN {usrn}", heading=heading, forms="", body=body))
 
