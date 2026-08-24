@@ -48,13 +48,18 @@ form {{ margin-bottom: 0.5em; }}
 input {{ font-size: 1em; padding: 4px; }}
 #map {{ width: 100%; height: 300px; border: 1px solid black; margin-bottom: 1em; }}
 tr.selected {{ background: #ffdd00; }}
+.topbar {{ display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }}
+.topbar h1 {{ margin: 0.67em 0; }}
 @media print {{
   a, a:visited {{ color: #0000ee; text-decoration: none; }}
   .checkbox-col {{ display: none; }}
 }}
 </style></head>
 <body>
+<div class="topbar">
 <h1><a href="/">AddressBase</a></h1>
+{heading}
+</div>
 {forms}{body}
 </body></html>
 """
@@ -174,7 +179,7 @@ def render_selectable_uprn_table(rows, checked_uprns=frozenset()):
         for uprn, usrn, sao, pao, address in rows
     )
     head = '<th class="checkbox-col"></th><th>UPRN</th><th>USRN</th><th>SAO</th><th>PAO</th><th>DELIVERY_ADDRESS</th>'
-    return f"<h2>addresses</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+    return f"<h2>Addresses</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
 def render_street_table(rows):
@@ -190,7 +195,7 @@ def render_street_table(rows):
         for usrn, street_description, locality, town_name in rows
     )
     head = "<th>USRN</th><th>STREET_DESCRIPTION</th><th>LOCALITY</th><th>TOWN_NAME</th>"
-    return f"<h2>streets</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+    return f"<h2>Streets</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
 def render_map(points):
@@ -328,7 +333,7 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path.startswith("/udprn/"):
             self.redirect_udprn(parsed.path.removeprefix("/udprn/"))
         else:
-            self.respond(PAGE.format(title="AddressBase", forms=SEARCH_FORMS, body=""))
+            self.respond(PAGE.format(title="AddressBase", heading="", forms=SEARCH_FORMS, body=""))
 
     def redirect(self, location):
         self.send_response(302)
@@ -360,8 +365,9 @@ class Handler(BaseHTTPRequestHandler):
                 lat_i, lon_i = cols.index("LATITUDE"), cols.index("LONGITUDE")
                 points.extend((row[lat_i], row[lon_i], uprn_label(uprn), None, None) for row in rows)
         links = "".join(f'<p><a href="/usrn/{u}">USRN {u}</a></p>' for u in sorted(usrns))
-        body = f"<h1>UPRN {html.escape(uprn)}</h1>{render_map(points)}{links}" + "".join(sections)
-        self.respond(PAGE.format(title=f"UPRN {uprn}", forms="", body=body))
+        body = f"{render_map(points)}{links}" + "".join(sections)
+        heading = f"<h1>UPRN {html.escape(uprn)}</h1>"
+        self.respond(PAGE.format(title=f"UPRN {uprn}", heading=heading, forms="", body=body))
 
     def show_usrn(self, usrn):
         sections = []
@@ -386,11 +392,12 @@ class Handler(BaseHTTPRequestHandler):
             points.extend((lat, lon, uprn_label(uprn), None, None) for uprn, lat, lon in blpu_rows)
         links = "".join(f'<p><a href="/uprn/{uprn}">UPRN {uprn}</a></p>' for uprn in uprns)
         body = (
-            f"<h1>USRN {html.escape(usrn)}</h1>{render_map(points)}"
+            f"{render_map(points)}"
             + "".join(sections)
             + f"<h2>addresses on this street</h2>{links}"
         )
-        self.respond(PAGE.format(title=f"USRN {usrn}", forms="", body=body))
+        heading = f"<h1>USRN {html.escape(usrn)}</h1>"
+        self.respond(PAGE.format(title=f"USRN {usrn}", heading=heading, forms="", body=body))
 
     def show_postcode(self, postcode, checked_uprns=frozenset()):
         postcode = normalize_postcode(postcode)
@@ -444,12 +451,9 @@ class Handler(BaseHTTPRequestHandler):
             ]
             uprn_table = render_selectable_uprn_table(uprn_summary_rows, checked_uprns)
 
-        body = (
-            f"<h1>postcode {html.escape(postcode)}</h1>{render_map(points)}"
-            f"{street_table}"
-            f"{uprn_table}"
-        )
-        self.respond(PAGE.format(title=f"postcode {postcode}", forms="", body=body))
+        body = f"{render_map(points)}{street_table}{uprn_table}"
+        heading = f"<h1>Postcode {html.escape(postcode)}</h1>"
+        self.respond(PAGE.format(title=f"postcode {postcode}", heading=heading, forms="", body=body))
 
     def redirect_udprn(self, udprn):
         row = self.server.con.execute(
