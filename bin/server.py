@@ -34,12 +34,14 @@ input {{ font-size: 1em; padding: 4px; }}
 </style></head>
 <body>
 <h1><a href="/">AddressBase</a></h1>
-<form action="/uprn" method="get"><label>UPRN <input name="q" autofocus></label> <button>search</button></form>
+{forms}{body}
+</body></html>
+"""
+
+SEARCH_FORMS = """<form action="/uprn" method="get"><label>UPRN <input name="q" autofocus></label> <button>search</button></form>
 <form action="/usrn" method="get"><label>USRN <input name="q"></label> <button>search</button></form>
 <form action="/postcode" method="get"><label>postcode <input name="q"></label> <button>search</button></form>
 <form action="/udprn" method="get"><label>UDPRN <input name="q"></label> <button>search</button></form>
-{body}
-</body></html>
 """
 
 
@@ -159,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path.startswith("/udprn/"):
             self.redirect_udprn(parsed.path.removeprefix("/udprn/"))
         else:
-            self.respond(PAGE.format(title="AddressBase", body=""))
+            self.respond(PAGE.format(title="AddressBase", forms=SEARCH_FORMS, body=""))
 
     def redirect(self, location):
         self.send_response(302)
@@ -192,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
                 points.extend((row[lat_i], row[lon_i], f"UPRN {uprn}", None) for row in rows)
         links = "".join(f'<p><a href="/usrn/{u}">USRN {u}</a></p>' for u in sorted(usrns))
         body = f"<h1>UPRN {html.escape(uprn)}</h1>{render_map(points)}{links}" + "".join(sections)
-        self.respond(PAGE.format(title=f"UPRN {uprn}", body=body))
+        self.respond(PAGE.format(title=f"UPRN {uprn}", forms="", body=body))
 
     def show_usrn(self, usrn):
         sections = []
@@ -221,7 +223,7 @@ class Handler(BaseHTTPRequestHandler):
             + "".join(sections)
             + f"<h2>addresses on this street</h2>{links}"
         )
-        self.respond(PAGE.format(title=f"USRN {usrn}", body=body))
+        self.respond(PAGE.format(title=f"USRN {usrn}", forms="", body=body))
 
     def show_postcode(self, postcode):
         postcode = normalize_postcode(postcode)
@@ -255,7 +257,7 @@ class Handler(BaseHTTPRequestHandler):
             f"<h2>streets</h2>{usrn_links}"
             f"<h2>addresses</h2>{uprn_links}"
         )
-        self.respond(PAGE.format(title=f"postcode {postcode}", body=body))
+        self.respond(PAGE.format(title=f"postcode {postcode}", forms="", body=body))
 
     def redirect_udprn(self, udprn):
         row = self.server.con.execute(
