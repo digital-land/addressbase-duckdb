@@ -152,13 +152,14 @@ def render_selectable_uprn_table(rows):
         "<tr>"
         f'<td><input type="checkbox" class="uprn-select" id="uprn-{uprn}"></td>'
         f"<td>{render_cell('UPRN', uprn)}</td>"
+        f"<td>{render_cell('USRN', usrn or None)}</td>"
         f"<td>{html.escape(sao)}</td>"
         f"<td>{html.escape(pao)}</td>"
         f"<td>{html.escape(address)}</td>"
         "</tr>"
-        for uprn, sao, pao, address in rows
+        for uprn, usrn, sao, pao, address in rows
     )
-    head = "<th></th><th>UPRN</th><th>SAO</th><th>PAO</th><th>DELIVERY_ADDRESS</th>"
+    head = "<th></th><th>UPRN</th><th>USRN</th><th>SAO</th><th>PAO</th><th>DELIVERY_ADDRESS</th>"
     return f"<h2>addresses</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
@@ -340,11 +341,18 @@ class Handler(BaseHTTPRequestHandler):
 
         uprn_table = ""
         if uprns:
+            usrn_by_uprn = field_by_uprn(con, "lpi", uprns, ["USRN"])
             sao_by_uprn = field_by_uprn(con, "lpi", uprns, SAO_FIELDS)
             pao_by_uprn = field_by_uprn(con, "lpi", uprns, PAO_FIELDS)
             address_by_uprn = field_by_uprn(con, "delivery_point_address", uprns, DELIVERY_ADDRESS_FIELDS, sep=", ")
             uprn_summary_rows = [
-                (uprn, sao_by_uprn.get(uprn, ""), pao_by_uprn.get(uprn, ""), address_by_uprn.get(uprn, ""))
+                (
+                    uprn,
+                    usrn_by_uprn.get(uprn, ""),
+                    sao_by_uprn.get(uprn, ""),
+                    pao_by_uprn.get(uprn, ""),
+                    address_by_uprn.get(uprn, ""),
+                )
                 for uprn in uprns
             ]
             uprn_table = render_selectable_uprn_table(uprn_summary_rows)
