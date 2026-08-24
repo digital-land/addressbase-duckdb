@@ -48,6 +48,10 @@ form {{ margin-bottom: 0.5em; }}
 input {{ font-size: 1em; padding: 4px; }}
 #map {{ width: 100%; height: 300px; border: 1px solid black; margin-bottom: 1em; }}
 tr.selected {{ background: #ffdd00; }}
+@media print {{
+  a, a:visited {{ color: #0000ee; text-decoration: none; }}
+  .checkbox-col {{ display: none; }}
+}}
 </style></head>
 <body>
 <h1><a href="/">AddressBase</a></h1>
@@ -159,7 +163,7 @@ def render_selectable_uprn_table(rows):
         return ""
     body = "".join(
         "<tr>"
-        f'<td><input type="checkbox" class="uprn-select" id="uprn-{uprn}" data-usrn="{usrn}"></td>'
+        f'<td class="checkbox-col"><input type="checkbox" class="uprn-select" id="uprn-{uprn}" data-usrn="{usrn}"></td>'
         f"<td>{render_cell('UPRN', uprn)}</td>"
         f"<td>{render_cell('USRN', usrn or None)}</td>"
         f"<td>{html.escape(sao)}</td>"
@@ -168,7 +172,7 @@ def render_selectable_uprn_table(rows):
         "</tr>"
         for uprn, usrn, sao, pao, address in rows
     )
-    head = "<th></th><th>UPRN</th><th>USRN</th><th>SAO</th><th>PAO</th><th>DELIVERY_ADDRESS</th>"
+    head = '<th class="checkbox-col"></th><th>UPRN</th><th>USRN</th><th>SAO</th><th>PAO</th><th>DELIVERY_ADDRESS</th>'
     return f"<h2>addresses</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
