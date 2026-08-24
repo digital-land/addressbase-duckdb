@@ -198,7 +198,7 @@ def render_map(points):
             for lat, lon, label, color, id_ in points
         ]
     )
-    return f"""<div id="map"></div>
+    return rf"""<div id="map"></div>
 <script>
 (function() {{
   var points = {markers};
@@ -252,8 +252,22 @@ def render_map(points):
       marker.closePopup();
     }}
   }});
+  var initializing = true;
+  map.on('moveend', function() {{
+    if (initializing) {{
+      initializing = false;
+      return;
+    }}
+    var center = map.getCenter();
+    location.hash = center.lat.toFixed(5) + ',' + center.lng.toFixed(5) + ',' + map.getZoom() + 'z';
+  }});
   var group = L.featureGroup(markers);
-  map.fitBounds(group.getBounds(), {{maxZoom: 18, padding: [20, 20]}});
+  var hashMatch = location.hash.match(/^#(-?[0-9.]+),(-?[0-9.]+),(\d+)z$/);
+  if (hashMatch) {{
+    map.setView([parseFloat(hashMatch[1]), parseFloat(hashMatch[2])], parseInt(hashMatch[3], 10));
+  }} else {{
+    map.fitBounds(group.getBounds(), {{maxZoom: 18, padding: [20, 20]}});
+  }}
 }})();
 </script>"""
 
