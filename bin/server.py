@@ -130,7 +130,7 @@ def render_map(points):
   }}).addTo(map);
   var markers = points.map(function(p) {{
     var color = p.color || '#3388ff';
-    var marker = L.circleMarker([p.lat, p.lon], {{radius: 8, color: color, fillColor: color, fillOpacity: 0.9}});
+    var marker = L.circleMarker([p.lat, p.lon], {{radius: 4, color: color, fillColor: color, fillOpacity: 0.9}});
     return marker.addTo(map).bindPopup(p.label);
   }});
   var group = L.featureGroup(markers);
