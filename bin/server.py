@@ -158,12 +158,13 @@ def render_table(name, cols, rows):
     return f"<h2>{html.escape(name)}</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
-def render_selectable_uprn_table(rows):
+def render_selectable_uprn_table(rows, checked_uprns=frozenset()):
     if not rows:
         return ""
     body = "".join(
         "<tr>"
-        f'<td class="checkbox-col"><input type="checkbox" class="uprn-select" id="uprn-{uprn}" data-usrn="{usrn}"></td>'
+        f'<td class="checkbox-col"><input type="checkbox" class="uprn-select" id="uprn-{uprn}" data-usrn="{usrn}"'
+        f'{" checked" if str(uprn) in checked_uprns else ""}></td>'
         f"<td>{render_cell('UPRN', uprn)}</td>"
         f"<td>{render_cell('USRN', usrn or None)}</td>"
         f"<td>{html.escape(sao)}</td>"
@@ -256,6 +257,13 @@ def render_map(points):
       marker.closePopup();
     }}
   }});
+  document.addEventListener('DOMContentLoaded', function() {{
+    document.querySelectorAll('.uprn-select:checked').forEach(function(checkbox) {{
+      updateHighlight(checkbox, true);
+      var marker = markersById[checkbox.id];
+      if (marker) marker.openPopup();
+    }});
+  }});
   var initializing = true;
   map.on('moveend', function() {{
     if (initializing) {{
@@ -294,7 +302,13 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path.startswith("/usrn/"):
             self.show_usrn(parsed.path.removeprefix("/usrn/"))
         elif parsed.path.startswith("/postcode/"):
-            self.show_postcode(unquote(parsed.path.removeprefix("/postcode/")))
+            checked_uprns = {
+                uprn.strip()
+                for value in parse_qs(parsed.query).get("uprn", [])
+                for uprn in value.split(",")
+                if uprn.strip()
+            }
+            self.show_postcode(unquote(parsed.path.removeprefix("/postcode/")), checked_uprns)
         elif parsed.path.startswith("/udprn/"):
             self.redirect_udprn(parsed.path.removeprefix("/udprn/"))
         else:
@@ -362,7 +376,7 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.respond(PAGE.format(title=f"USRN {usrn}", forms="", body=body))
 
-    def show_postcode(self, postcode):
+    def show_postcode(self, postcode, checked_uprns=frozenset()):
         postcode = normalize_postcode(postcode)
         con = self.server.con
         uprn_rows = con.execute(
@@ -412,7 +426,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 for uprn in uprns
             ]
-            uprn_table = render_selectable_uprn_table(uprn_summary_rows)
+            uprn_table = render_selectable_uprn_table(uprn_summary_rows, checked_uprns)
 
         body = (
             f"<h1>postcode {html.escape(postcode)}</h1>{render_map(points)}"
