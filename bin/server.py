@@ -145,12 +145,32 @@ def render_table(name, cols, rows):
     return f"<h2>{html.escape(name)}</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
 
 
+def render_selectable_uprn_table(rows):
+    if not rows:
+        return ""
+    body = "".join(
+        "<tr>"
+        f'<td><input type="checkbox" class="uprn-select" id="uprn-{uprn}"></td>'
+        f"<td>{render_cell('UPRN', uprn)}</td>"
+        f"<td>{html.escape(sao)}</td>"
+        f"<td>{html.escape(pao)}</td>"
+        f"<td>{html.escape(address)}</td>"
+        "</tr>"
+        for uprn, sao, pao, address in rows
+    )
+    head = "<th></th><th>UPRN</th><th>SAO</th><th>PAO</th><th>DELIVERY_ADDRESS</th>"
+    return f"<h2>addresses</h2><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+
 def render_map(points):
     points = [p for p in points if p[0] is not None and p[1] is not None]
     if not points:
         return ""
     markers = json.dumps(
-        [{"lat": lat, "lon": lon, "label": label, "color": color} for lat, lon, label, color in points]
+        [
+            {"lat": lat, "lon": lon, "label": label, "color": color, "id": id_}
+            for lat, lon, label, color, id_ in points
+        ]
     )
     return f"""<div id="map"></div>
 <script>
@@ -160,10 +180,29 @@ def render_map(points):
   L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
     attribution: '&copy; OpenStreetMap contributors'
   }}).addTo(map);
+  var markersById = {{}};
   var markers = points.map(function(p) {{
     var color = p.color || '#3388ff';
     var marker = L.circleMarker([p.lat, p.lon], {{radius: 4, color: color, fillColor: color, fillOpacity: 0.9}});
-    return marker.addTo(map).bindPopup(p.label);
+    marker.addTo(map).bindPopup(p.label);
+    if (p.id) {{
+      markersById[p.id] = marker;
+      marker.on('click', function() {{
+        var checkbox = document.getElementById(p.id);
+        if (checkbox) checkbox.checked = true;
+      }});
+    }}
+    return marker;
+  }});
+  document.addEventListener('change', function(e) {{
+    if (!e.target.matches('.uprn-select')) return;
+    var marker = markersById[e.target.id];
+    if (!marker) return;
+    if (e.target.checked) {{
+      marker.openPopup();
+    }} else {{
+      marker.closePopup();
+    }}
   }});
   var group = L.featureGroup(markers);
   map.fitBounds(group.getBounds(), {{maxZoom: 18, padding: [20, 20]}});
@@ -223,7 +262,7 @@ class Handler(BaseHTTPRequestHandler):
                 usrns.update(row[cols.index("USRN")] for row in rows)
             if table == "blpu" and "LATITUDE" in cols and "LONGITUDE" in cols:
                 lat_i, lon_i = cols.index("LATITUDE"), cols.index("LONGITUDE")
-                points.extend((row[lat_i], row[lon_i], f"UPRN {uprn}", None) for row in rows)
+                points.extend((row[lat_i], row[lon_i], f"UPRN {uprn}", None, None) for row in rows)
         links = "".join(f'<p><a href="/usrn/{u}">USRN {u}</a></p>' for u in sorted(usrns))
         body = f"<h1>UPRN {html.escape(uprn)}</h1>{render_map(points)}{links}" + "".join(sections)
         self.respond(PAGE.format(title=f"UPRN {uprn}", forms="", body=body))
@@ -238,8 +277,8 @@ class Handler(BaseHTTPRequestHandler):
                 start_lat, start_lon = cols.index("STREET_START_LAT"), cols.index("STREET_START_LONG")
                 end_lat, end_lon = cols.index("STREET_END_LAT"), cols.index("STREET_END_LONG")
                 for row in rows:
-                    points.append((row[start_lat], row[start_lon], f"USRN {usrn} START", "red"))
-                    points.append((row[end_lat], row[end_lon], f"USRN {usrn} END", "red"))
+                    points.append((row[start_lat], row[start_lon], f"USRN {usrn} START", "red", None))
+                    points.append((row[end_lat], row[end_lon], f"USRN {usrn} END", "red", None))
         cols, rows = query_rows(self.server.con, "lpi", "USRN", usrn)
         uprns = sorted({row[cols.index("UPRN")] for row in rows}) if "UPRN" in cols else []
         if uprns:
@@ -248,7 +287,9 @@ class Handler(BaseHTTPRequestHandler):
                 f"({','.join('?' * len(uprns))})",
                 uprns,
             ).fetchall()
-            points.extend((lat, lon, f"UPRN <a href='/uprn/{uprn}'>{uprn}</a>", None) for uprn, lat, lon in blpu_rows)
+            points.extend(
+                (lat, lon, f"UPRN <a href='/uprn/{uprn}'>{uprn}</a>", None, None) for uprn, lat, lon in blpu_rows
+            )
         links = "".join(f'<p><a href="/uprn/{uprn}">UPRN {uprn}</a></p>' for uprn in uprns)
         body = (
             f"<h1>USRN {html.escape(usrn)}</h1>{render_map(points)}"
@@ -264,7 +305,7 @@ class Handler(BaseHTTPRequestHandler):
             "SELECT UPRN, LATITUDE, LONGITUDE FROM blpu WHERE POSTCODE_LOCATOR = ? ORDER BY UPRN", [postcode]
         ).fetchall()
         uprns = [row[0] for row in uprn_rows]
-        points = [(lat, lon, f"UPRN {uprn}", None) for uprn, lat, lon in uprn_rows]
+        points = [(lat, lon, f"UPRN {uprn}", None, f"uprn-{uprn}") for uprn, lat, lon in uprn_rows]
 
         usrns = []
         if uprns:
@@ -279,8 +320,8 @@ class Handler(BaseHTTPRequestHandler):
                 usrns,
             ).fetchall()
             for usrn, start_lat, start_lon, end_lat, end_lon in street_rows:
-                points.append((start_lat, start_lon, f"USRN {usrn} START", "red"))
-                points.append((end_lat, end_lon, f"USRN {usrn} END", "red"))
+                points.append((start_lat, start_lon, f"USRN {usrn} START", "red", None))
+                points.append((end_lat, end_lon, f"USRN {usrn} END", "red", None))
 
         street_table = ""
         if usrns:
@@ -302,7 +343,7 @@ class Handler(BaseHTTPRequestHandler):
                 (uprn, sao_by_uprn.get(uprn, ""), pao_by_uprn.get(uprn, ""), address_by_uprn.get(uprn, ""))
                 for uprn in uprns
             ]
-            uprn_table = render_table("addresses", ["UPRN", "SAO", "PAO", "DELIVERY_ADDRESS"], uprn_summary_rows)
+            uprn_table = render_selectable_uprn_table(uprn_summary_rows)
 
         body = (
             f"<h1>postcode {html.escape(postcode)}</h1>{render_map(points)}"
