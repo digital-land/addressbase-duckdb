@@ -19,6 +19,22 @@ PORT = 8002
 UPRN_TABLES = ["blpu", "lpi", "classification", "delivery_point_address", "organisation", "xref", "successor"]
 USRN_TABLES = ["street", "street_descriptor"]
 
+SAO_FIELDS = ["SAO_START_NUMBER", "SAO_START_SUFFIX", "SAO_END_NUMBER", "SAO_END_SUFFIX", "SAO_TEXT"]
+PAO_FIELDS = ["PAO_START_NUMBER", "PAO_START_SUFFIX", "PAO_END_NUMBER", "PAO_END_SUFFIX", "PAO_TEXT"]
+DELIVERY_ADDRESS_FIELDS = [
+    "ORGANISATION_NAME",
+    "DEPARTMENT_NAME",
+    "SUB_BUILDING_NAME",
+    "BUILDING_NAME",
+    "BUILDING_NUMBER",
+    "DEPENDENT_THOROUGHFARE",
+    "THOROUGHFARE",
+    "DOUBLE_DEPENDENT_LOCALITY",
+    "DEPENDENT_LOCALITY",
+    "POST_TOWN",
+    "POSTCODE",
+]
+
 PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>{title}</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -100,6 +116,22 @@ def render_cell(col, v):
     if col in ("POSTCODE_LOCATOR", "POSTCODE"):
         return f'<a href="/postcode/{quote(str(v))}">{text}</a>'
     return text
+
+
+def join_fields(cols, row, fields, sep=" "):
+    return sep.join(str(row[cols.index(f)]) for f in fields if row[cols.index(f)] not in (None, ""))
+
+
+def field_by_uprn(con, table, uprns, fields, sep=" "):
+    cols = [row[0] for row in con.execute(f"DESCRIBE {table}").fetchall()]
+    rows = con.execute(
+        f"SELECT * FROM {table} WHERE UPRN IN ({','.join('?' * len(uprns))})", uprns
+    ).fetchall()
+    uprn_i = cols.index("UPRN")
+    result = {}
+    for row in rows:
+        result.setdefault(row[uprn_i], join_fields(cols, row, fields, sep))
+    return result
 
 
 def render_table(name, cols, rows):
@@ -250,12 +282,32 @@ class Handler(BaseHTTPRequestHandler):
                 points.append((start_lat, start_lon, f"USRN {usrn} START", "red"))
                 points.append((end_lat, end_lon, f"USRN {usrn} END", "red"))
 
-        usrn_links = "".join(f'<p><a href="/usrn/{usrn}">USRN {usrn}</a></p>' for usrn in usrns)
-        uprn_links = "".join(f'<p><a href="/uprn/{uprn}">UPRN {uprn}</a></p>' for uprn in uprns)
+        street_table = ""
+        if usrns:
+            street_rows = con.execute(
+                "SELECT USRN, STREET_DESCRIPTION, LOCALITY, TOWN_NAME FROM street_descriptor "
+                f"WHERE USRN IN ({','.join('?' * len(usrns))}) ORDER BY USRN",
+                usrns,
+            ).fetchall()
+            street_table = render_table(
+                "streets", ["USRN", "STREET_DESCRIPTION", "LOCALITY", "TOWN_NAME"], street_rows
+            )
+
+        uprn_table = ""
+        if uprns:
+            sao_by_uprn = field_by_uprn(con, "lpi", uprns, SAO_FIELDS)
+            pao_by_uprn = field_by_uprn(con, "lpi", uprns, PAO_FIELDS)
+            address_by_uprn = field_by_uprn(con, "delivery_point_address", uprns, DELIVERY_ADDRESS_FIELDS, sep=", ")
+            uprn_summary_rows = [
+                (uprn, sao_by_uprn.get(uprn, ""), pao_by_uprn.get(uprn, ""), address_by_uprn.get(uprn, ""))
+                for uprn in uprns
+            ]
+            uprn_table = render_table("addresses", ["UPRN", "SAO", "PAO", "DELIVERY_ADDRESS"], uprn_summary_rows)
+
         body = (
             f"<h1>postcode {html.escape(postcode)}</h1>{render_map(points)}"
-            f"<h2>streets</h2>{usrn_links}"
-            f"<h2>addresses</h2>{uprn_links}"
+            f"{street_table}"
+            f"{uprn_table}"
         )
         self.respond(PAGE.format(title=f"postcode {postcode}", forms="", body=body))
 
